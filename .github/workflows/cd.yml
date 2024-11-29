@@ -75,7 +75,7 @@ jobs:
           sudo yum install -y docker
           sudo service docker start
           # Descargar e iniciar la imagen desde Docker Hub
-          docker pull ${{ secrets.DOCKER_USERNAME }}/holamundophp:latest
-          docker stop holamundophp-container || true
-          docker rm holamundophp-container || true
-          docker run -d --name holamundophp-container -p 80:80 ${{ secrets.DOCKER_USERNAME }}/holamundophp:latest
+          sudo docker pull ${{ secrets.DOCKER_USERNAME }}/holamundophp:latest
+          sudo docker stop holamundophp-container || true
+          sudo docker rm holamundophp-container || true
+          sudo docker run -d --name holamundophp-container -p 80:80 ${{ secrets.DOCKER_USERNAME }}/holamundophp:latest
