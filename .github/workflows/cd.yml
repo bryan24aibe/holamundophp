@@ -1,0 +1,81 @@
+name: CI/CD with Docker Hub and EC2
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+    # Clonar el repositorio
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        repository: bryan24aibe/holamundophp
+
+    # Obtener la próxima versión
+    - name: Determine Next Docker Tag
+      id: docker_version
+      run: |
+        # Obtener todas las etiquetas existentes
+        EXISTING_TAGS=$(curl -s -u ${{ secrets.DOCKER_USERNAME }}:${{ secrets.DOCKER_PASSWORD }} \
+        "https://hub.docker.com/v2/repositories/${{ secrets.DOCKER_USERNAME }}/holamundophp/tags/" | jq -r '.results[].name')
+        
+        # Buscar la mayor versión existente
+        MAX_VERSION=$(echo "$EXISTING_TAGS" | grep -E '^v[0-9]+\.[0-9]+$' | sort -V | tail -n 1 | sed 's/v//')
+        MAJOR=$(echo "$MAX_VERSION" | cut -d '.' -f 1)
+        MINOR=$(echo "$MAX_VERSION" | cut -d '.' -f 2)
+        
+        # Incrementar la versión
+        if [ -z "$MAX_VERSION" ]; then
+          NEXT_VERSION="v1.0"
+        else
+          NEXT_VERSION="v$MAJOR.$((MINOR + 1))"
+        fi
+        echo "NEXT_VERSION=$NEXT_VERSION" >> $GITHUB_ENV
+
+    # Log in en DockerHub
+    - name: Log in to DockerHub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    # Construir la imagen Docker con las etiquetas necesarias
+    - name: Build Docker Image
+      run: |
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/holamundophp:latest \
+                     -t ${{ secrets.DOCKER_USERNAME }}/holamundophp:${{ env.NEXT_VERSION }} .
+
+    # Subir la imagen a Docker Hub
+    - name: Push Docker Image to Docker Hub
+      run: |
+        docker push ${{ secrets.DOCKER_USERNAME }}/holamundophp:latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/holamundophp:${{ env.NEXT_VERSION }}
+
+  deploy-to-ec2:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+    # Acceder a la instancia EC2 por SSH y desplegar
+    - name: Deploy Docker Image on EC2
+      uses: appleboy/ssh-action@v0.1.8
+      with:
+        host: ${{ secrets.EC2_PUBLIC_IP }}
+        username: ec2-user
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          # Actualizar paquetes
+          sudo yum update -y
+          # Instalar Docker si no está instalado
+          sudo amazon-linux-extras enable docker
+          sudo yum install -y docker
+          sudo service docker start
+          # Descargar e iniciar la imagen desde Docker Hub
+          docker pull ${{ secrets.DOCKER_USERNAME }}/holamundophp:latest
+          docker stop holamundophp-container || true
+          docker rm holamundophp-container || true
+          docker run -d --name holamundophp-container -p 80:80 ${{ secrets.DOCKER_USERNAME }}/holamundophp:latest
