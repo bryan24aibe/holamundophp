@@ -8,7 +8,7 @@
 <body>
 
     <h1><?php echo "Hola Mundo version 2"; ?></h1>
-    <h2><?php echo "Mi nombre es Bryan Lara"; ?></h2>
+    <h2><?php echo "Mi nombre es Bryan Prueba"; ?></h2>
     <form method="post">
         <button type="submit" name="deploy">Iniciar Deploy</button>
     </form>
